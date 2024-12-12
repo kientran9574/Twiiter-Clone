@@ -21,8 +21,8 @@ export const loginController = async (req: Request, res: Response) => {
 }
 export const refreshTokenController = async (req: Request, res: Response) => {
   const { refresh_token } = req.body
-  const { user_id, verify } = req.decoded_refresh_token as TokenPayload
-  const result = await userService.refreshToken({ user_id, verify, refresh_token })
+  const { user_id, verify , exp} = req.decoded_refresh_token as TokenPayload
+  const result = await userService.refreshToken({ user_id, verify, refresh_token ,exp })
   return res.json({
     message: 'Refresh token success',
     result

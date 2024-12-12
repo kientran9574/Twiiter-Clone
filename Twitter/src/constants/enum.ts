@@ -14,3 +14,19 @@ export enum MediaType {
   Video,
   VideoHls
 }
+export enum EncodingStatus {
+  Pending, // Đang chờ ở hàng đợi (chưa được encode)
+  Processing, // Đang encode
+  Success, // Encode thành công
+  Failed // Encode thất bại
+}
+export enum TweetType {
+  Tweet,  
+  Retweet,
+  Comment,
+  QuoteTweet
+}
+export enum TweetAudience {
+  Everyone, // 0
+  TwitterCircle // 1
+}

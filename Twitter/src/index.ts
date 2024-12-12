@@ -7,7 +7,13 @@ import mediasRoutes from './routes/medias.routes'
 import { defaultErrorHandler } from './middlewares/error.middlewares'
 import databaseService from './services/database.services'
 import cors from 'cors'
-databaseService.connect()
+import tweetsRouter from './routes/tweets.routes'
+import bookmarksRouter from './routes/bookmarks.routes'
+import likesRouter from './routes/like.routes'
+import searchRouter from './routes/search.routes'
+databaseService.connect().then(() => {
+  databaseService.indexUser()
+})
 const app = express()
 const port = 4000
 app.use(cors())
@@ -22,6 +28,10 @@ app.use('/medias', mediasRoutes)
 // Cách 2
 app.use('/static', staticRouter)
 // flow error handler xử lý lỗi cho cả cái app , khi cái app của chúng ta có lỗi thì sẽ chạy vào này
+app.use('/tweets', tweetsRouter)
+app.use('/bookmarks', bookmarksRouter)
+app.use('/likes', likesRouter)
+app.use('/search', searchRouter)
 app.use(defaultErrorHandler)
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)

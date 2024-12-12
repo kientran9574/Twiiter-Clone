@@ -26,3 +26,11 @@ export const uploadVideoHlsController = async (req: Request, res: Response) => {
     data: url
   })
 }
+export const videoStatusController = async (req: Request, res: Response) => {
+  const { id } = req.params
+  const data = await mediasService.videoStatusService(id)
+  return res.json({
+    message: 'check video status success',
+    data
+  })
+}

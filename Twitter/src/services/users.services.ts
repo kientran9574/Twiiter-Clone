@@ -2,7 +2,7 @@ import User from '~/models/databases/Users.schema'
 import databaseService from './database.services'
 import { RegisterReqBody, UpdateMeReqBody } from '~/models/request/User.request'
 import { hashPassword } from '~/utils/crypto'
-import { signToken } from '~/utils/jwt'
+import { signToken, verifyToken } from '~/utils/jwt'
 import { TokenType, UserVerifyStatus } from '~/constants/enum'
 import RefreshToken from '~/models/databases/RefreshToken.schema'
 import { ObjectId, WithId } from 'mongodb'
@@ -27,7 +27,18 @@ class UserService {
     })
   }
   // Tạo chữ ký refresh_token
-  private signRefreshToken({ user_id, verify }: { user_id: string; verify: UserVerifyStatus }) {
+  private signRefreshToken({ user_id, verify, exp }: { user_id: string; verify: UserVerifyStatus; exp?: number }) {
+    if (exp) {
+      return signToken({
+        payload: {
+          user_id,
+          token_type: TokenType.RefreshToken,
+          verify,
+          exp
+        },
+        privateKey: process.env.JWT_SECRET_REFRESH_TOKEN as string
+      })
+    }
     return signToken({
       payload: {
         user_id,
@@ -72,6 +83,12 @@ class UserService {
       }
     })
   }
+  private decodeRefreshToken(refresh_Token: string) {
+    return verifyToken({
+      token: refresh_Token,
+      secretOrPublicKey: process.env.JWT_SECRET_REFRESH_TOKEN as string
+    })
+  }
   // Sau khi mình insert vào db nó có trả về id user
   async register(payload: RegisterReqBody) {
     const user_id = new ObjectId()
@@ -101,11 +118,14 @@ class UserService {
         verify: UserVerifyStatus.Unverified
       })
     ])
+    const { iat, exp } = await this.decodeRefreshToken(refresh_token)
     // thêm refresh_token vào trong database
     await databaseService.refreshTokens.insertOne(
       new RefreshToken({
         user_id: new ObjectId(user_id),
-        token: refresh_token
+        token: refresh_token,
+        iat,
+        exp
       })
     )
     return {
@@ -129,10 +149,13 @@ class UserService {
         verify
       })
     ])
+    const { iat, exp } = await this.decodeRefreshToken(refresh_token)
     await databaseService.refreshTokens.insertOne(
       new RefreshToken({
         token: refresh_token,
-        user_id: new ObjectId(user_id)
+        user_id: new ObjectId(user_id),
+        iat,
+        exp
       })
     )
     return {
@@ -143,21 +166,26 @@ class UserService {
   async refreshToken({
     user_id,
     verify,
-    refresh_token
+    refresh_token,
+    exp
   }: {
     user_id: string
     verify: UserVerifyStatus
     refresh_token: string
+    exp: number
   }) {
     const [new_access_token, new_refresh_token] = await Promise.all([
       this.signAccessToken({ user_id, verify }),
-      this.signRefreshToken({ user_id, verify }),
+      this.signRefreshToken({ user_id, verify, exp }),
       databaseService.refreshTokens.deleteOne({ token: refresh_token })
     ])
+    const decoded_refresh_token = await this.decodeRefreshToken(refresh_token)
     await databaseService.refreshTokens.insertOne(
       new RefreshToken({
         token: new_refresh_token,
-        user_id: new ObjectId(user_id)
+        user_id: new ObjectId(user_id),
+        exp: decoded_refresh_token.exp,
+        iat: decoded_refresh_token.iat
       })
     )
     return {
@@ -225,7 +253,11 @@ class UserService {
         user_id: user._id,
         verify: user.verify
       })
-      await databaseService.refreshTokens.insertOne({ user_id: user._id, token: refresh_token })
+      const { iat, exp } = await this.decodeRefreshToken(refresh_token)
+
+      await databaseService.refreshTokens.insertOne(
+        new RefreshToken({ user_id: user._id, token: refresh_token, iat, exp })
+      )
       return {
         access_token,
         refresh_token,
@@ -268,6 +300,10 @@ class UserService {
       )
     ])
     const [access_token, refresh_token] = token
+    const { iat, exp } = await this.decodeRefreshToken(refresh_token)
+    await databaseService.refreshTokens.insertOne(
+      new RefreshToken({ user_id: new ObjectId(user_id), token: refresh_token, iat, exp })
+    )
     // insert refresh_token vào trong db
     return {
       access_token,
